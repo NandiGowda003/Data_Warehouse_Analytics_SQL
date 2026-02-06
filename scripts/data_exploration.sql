@@ -1,114 +1,114 @@
 /*
-=============================================================
-Create Database and Schemas
-=============================================================
-Script Purpose:
-    This script creates a new database named 'DataWarehouseAnalytics' after checking if it already exists. 
-    If the database exists, it is dropped and recreated. Additionally, this script creates a schema called gold
-	
-WARNING:
-    Running this script will drop the entire 'DataWarehouseAnalytics' database if it exists. 
-    All data in the database will be permanently deleted. Proceed with caution 
-    and ensure you have proper backups before running this script.
+===============================================================================
+Database Exploration
+===============================================================================
+Purpose:
+    - To explore the structure of the database, including the list of tables and their schemas.
+    - To inspect the columns and metadata for specific tables.
+
+Table Used:
+    - INFORMATION_SCHEMA.TABLES
+    - INFORMATION_SCHEMA.COLUMNS
 */
-
-USE master;
-GO
-
--- Drop and recreate the 'DataWarehouseAnalytics' database
-IF EXISTS (SELECT 1 FROM sys.databases WHERE name = 'DataWarehouseAnalytics')
-BEGIN
-    ALTER DATABASE DataWarehouseAnalytics SET SINGLE_USER WITH ROLLBACK IMMEDIATE;
-    DROP DATABASE DataWarehouseAnalytics;
-END;
-GO
-
--- Create the 'DataWarehouseAnalytics' database
-CREATE DATABASE DataWarehouseAnalytics;
-GO
 
 USE DataWarehouseAnalytics;
 GO
 
--- Create Schemas
+-- 1. Database Exploration
+-- Explore all objects in the database
+SELECT *
+FROM 
+	INFORMATION_SCHEMA.TABLES
 
-CREATE SCHEMA gold;
-GO
+-- Explore all columns in the database
+SELECT *
+FROM 
+	INFORMATION_SCHEMA.COLUMNS
+WHERE 
+	TABLE_NAME IN ('dim_customers', 'dim_products', 'fact_sales')
 
-CREATE TABLE gold.dim_customers(
-	customer_key int,
-	customer_id int,
-	customer_number nvarchar(50),
-	first_name nvarchar(50),
-	last_name nvarchar(50),
-	country nvarchar(50),
-	marital_status nvarchar(50),
-	gender nvarchar(50),
-	birthdate date,
-	create_date date
-);
-GO
+	===============================================================================
+	Database Explore dimension
+	===============================================================================
+	-- explore dimension exploration by looking at the dim_customers and dim_products tables
+	-- explore all countries in the dim_customers table
+SELECT DISTINCT country FROM gold.dim_customers;
 
-CREATE TABLE gold.dim_products(
-	product_key int ,
-	product_id int ,
-	product_number nvarchar(50) ,
-	product_name nvarchar(50) ,
-	category_id nvarchar(50) ,
-	category nvarchar(50) ,
-	subcategory nvarchar(50) ,
-	maintenance nvarchar(50) ,
-	cost int,
-	product_line nvarchar(50),
-	start_date date 
-);
-GO
+-- explore all categories for " major division" in the dim_products table
+SELECT DISTINCT 
+	category, 
+	subcategory, 
+	product_name 
+FROM gold.dim_products
+ORDER BY 1,2,3;
 
-CREATE TABLE gold.fact_sales(
-	order_number nvarchar(50),
-	product_key int,
-	customer_key int,
-	order_date date,
-	shipping_date date,
-	due_date date,
-	sales_amount int,
-	quantity tinyint,
-	price int 
-);
-GO
+	===============================================================================
+	Database Explore date_range
+	===============================================================================
+	-- Date exploration
+	-- find first and last date order
+SELECT 
+	MIN(order_date) AS first_order,
+	MAX(order_date) AS last_order,
+	DATEDIFF(year, MIN(order_date), MAX(order_date)) AS order_range_years
+FROM gold.fact_sales
 
-TRUNCATE TABLE gold.dim_customers;
-GO
+-- find youngest and oldest birtdate
+SELECT
+	MIN(birthdate) AS youngest_birthdate,
+	DATEDIFF(year, MIN(birthdate), GETDATE()) AS oldest_age,
+	MAX(birthdate) AS oldest_birthdate,
+	DATEDIFF(year, MAX(birthdate), GETDATE()) AS youngest_age
+	FROM gold.dim_customers
 
-BULK INSERT gold.dim_customers
-FROM 'C:\Users\admin\OneDrive\Desktop\OneDrive\DWH_Analytics\gold.dim_customers.csv'
-WITH (
-	FIRSTROW = 2,
-	FIELDTERMINATOR = ',',
-	TABLOCK
-);
-GO
+	==========================================================================
+	Database Measure Exploration
+	==========================================================================
+	--measure exploration
+	--find the total sales
+SELECT 
+	SUM(sales_amount) AS total_sales
+FROM gold.fact_sales
 
-TRUNCATE TABLE gold.dim_products;
-GO
+-- find how many items are sold
+SELECT
+	SUM(quantity) total_quantity
+FROM gold.fact_sales
 
-BULK INSERT gold.dim_products
-FROM 'C:\Users\admin\OneDrive\Desktop\OneDrive\DWH_Analytics\gold.dim_products.csv'
-WITH (
-	FIRSTROW = 2,
-	FIELDTERMINATOR = ',',
-	TABLOCK
-);
-GO
+--find avg selling price
+SELECT
+	AVG(price) avg_price
+FROM gold.fact_sales
 
-TRUNCATE TABLE gold.fact_sales;
-GO
+-- find the total number of orders
+SELECT
+	COUNT(order_number) total_orders
+FROM gold.fact_sales
 
-BULK INSERT gold.fact_sales
-FROM 'C:\Users\admin\OneDrive\Desktop\OneDrive\DWH_Analytics\gold.fact_sales.csv'
-WITH (
-	FIRSTROW = 2,
-	FIELDTERMINATOR = ',',
-	TABLOCK
-);
-GO
+-- unique orders
+SELECT
+	COUNT(DISTINCT order_number) total_orders
+FROM gold.fact_sales
+
+--Find the total number of products
+SELECT COUNT(product_name) AS total_products FROM gold.dim_products
+
+--Find the total number of customers
+SELECT COUNT(customer_key) AS total_customers FROM gold.dim_customers;
+
+--Find the total number of customers that has place the order
+SELECT COUNT(DISTINCT customer_key) AS total_customers FROM gold.dim_customers;
+
+-- Generate a Report that shows all key metrics of the business
+SELECT 'Total Sales' AS measure_name, SUM(sales_amount) AS measure_value FROM gold.fact_sales
+UNION ALL
+SELECT 'Total Quantity', SUM(quantity) FROM gold.fact_sales
+UNION ALL
+SELECT 'Average Price', AVG(price) FROM gold.fact_sales
+UNION ALL
+SELECT 'Total Orders', COUNT(DISTINCT order_number) FROM gold.fact_sales
+UNION ALL
+SELECT 'Total Products', COUNT(DISTINCT product_name) FROM gold.dim_products
+UNION ALL
+SELECT 'Total Customers', COUNT(customer_key) FROM gold.dim_customers;
+
